@@ -45,37 +45,44 @@ function App() {
   const [prankActive, setPrankActive] = useState(false);
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [audioBlobUrl, setAudioBlobUrl] = useState(null);
   const audioRef = useRef(null);
 
-  // Fetch News
+  // Fetch News & Preload Audio into Memory (Blob)
   useEffect(() => {
-    const fetchNews = async () => {
+    const fetchNewsAndAudio = async () => {
       try {
-        const response = await fetch('https://saurav.tech/NewsAPI/top-headlines/category/technology/us.json');
-        const data = await response.json();
-        let articles = data.articles.filter(a => a.urlToImage);
+        // 1. Fetch News
+        const newsPromise = fetch('https://saurav.tech/NewsAPI/top-headlines/category/technology/us.json')
+          .then(res => res.json())
+          .then(data => {
+            let articles = data.articles.filter(a => a.urlToImage);
+            articles = articles.sort(() => Math.random() - 0.5);
+            return articles.length < 5 ? [...articles, ...FALLBACK_NEWS] : articles;
+          });
 
-        articles = articles.sort(() => Math.random() - 0.5);
+        // 2. Fetch Audio as Blob to force it into memory (fixing the first-visit delay)
+        const audioPromise = fetch(prankAudioFile)
+          .then(res => res.blob())
+          .then(blob => URL.createObjectURL(blob));
 
-        if (articles.length < 5) {
-          articles = [...articles, ...FALLBACK_NEWS];
-        }
+        const [articles, blobUrl] = await Promise.all([newsPromise, audioPromise]);
 
         setNews(articles.slice(0, 10));
+        setAudioBlobUrl(blobUrl);
       } catch (error) {
-        console.error("News fetch failed, using fallback", error);
+        console.error("Initialization failed", error);
         setNews(FALLBACK_NEWS.sort(() => Math.random() - 0.5));
       } finally {
         setLoading(false);
       }
     };
 
-    fetchNews();
+    fetchNewsAndAudio();
 
-    // Pre-seek audio to 13s to force browser to buffer that segment early
-    if (audioRef.current) {
-      audioRef.current.currentTime = 13;
-    }
+    return () => {
+      if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
+    };
   }, []);
 
   const triggerPrank = (e) => {
@@ -83,10 +90,10 @@ function App() {
     if (prankActive) return;
     setPrankActive(true);
 
-    // Play Local Audio
+    // Play Local Audio Instantly from Memory
     if (audioRef.current) {
       audioRef.current.volume = 1.0;
-      audioRef.current.currentTime = 13; // Ensure it's exactly 13s on trigger
+      audioRef.current.currentTime = 13; // Jump to the drop instantly
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.catch(e => console.error("Audio play failed:", e));
@@ -106,7 +113,7 @@ function App() {
     };
     window.addEventListener('click', handleClick, { capture: true });
     return () => window.removeEventListener('click', handleClick, { capture: true });
-  }, [prankActive]);
+  }, [prankActive, audioBlobUrl]);
 
   if (loading) {
     return (
@@ -121,13 +128,9 @@ function App() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${prankActive ? 'prank-mode' : 'bg-slate-50 text-slate-900'}`}>
-      {/* 
-          Added preload="auto" and crossOrigin to help with buffering.
-          The currentTime is also initialized in useLayoutEffect/useEffect.
-      */}
       <audio
         ref={audioRef}
-        src={prankAudioFile}
+        src={audioBlobUrl || prankAudioFile}
         loop
         preload="auto"
       />
@@ -253,7 +256,7 @@ function App() {
               <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-500 rounded-full blur-3xl opacity-20 transform translate-x-10 -translate-y-10"></div>
               <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400 mb-3 sm:mb-4" />
               <h3 className="font-bold text-lg sm:text-xl mb-1.5 sm:mb-2">Subscribe to Premium</h3>
-              <p className="text-slate-300 text-sm mb-5 sm:mb-6 leading-relaxed">Get unlimited access to exclusive content, in-depth analysis, and ad-free browsing.</p>
+              <p className="text-slate-300 text-xs sm:text-sm mb-5 sm:mb-6 leading-relaxed">Get unlimited access to exclusive content, in-depth analysis, and ad-free browsing.</p>
               <button className="w-full bg-blue-500 hover:bg-blue-400 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg hover:shadow-blue-500/25">
                 Start Free Trial
               </button>
