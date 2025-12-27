@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Newspaper, Menu, Search, TrendingUp, Clock, Share2, AlertCircle } from 'lucide-react';
+import { Newspaper, Menu, Search, TrendingUp, Clock, Share2, AlertCircle, ShieldCheck } from 'lucide-react';
 import prankAudioFile from './assets/prank.mp3';
 
 // Reliable backup news in case API fails
@@ -45,13 +45,34 @@ function App() {
   const [prankActive, setPrankActive] = useState(false);
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [audioBlobUrl, setAudioBlobUrl] = useState(null);
   const audioRef = useRef(null);
 
-  // Fetch News & Preload Audio into Memory (Blob)
+  // Handle Body Scrollbar
   useEffect(() => {
-    const fetchNewsAndAudio = async () => {
+    if (loading || prankActive) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [loading, prankActive]);
+
+  // Combined Initialization: 3s loading bar + news + audio preloading
+  useEffect(() => {
+    const startTime = Date.now();
+    const MIN_LOAD_TIME = 3000; // 3 seconds
+
+    const initialize = async () => {
       try {
+        // Start Progress Bar Simulation
+        const progressInterval = setInterval(() => {
+          setLoadingProgress(prev => {
+            if (prev >= 95) return prev;
+            return prev + (95 - prev) * 0.1;
+          });
+        }, 150);
+
         // 1. Fetch News
         const newsPromise = fetch('https://saurav.tech/NewsAPI/top-headlines/category/technology/us.json')
           .then(res => res.json())
@@ -61,24 +82,35 @@ function App() {
             return articles.length < 5 ? [...articles, ...FALLBACK_NEWS] : articles;
           });
 
-        // 2. Fetch Audio as Blob to force it into memory (fixing the first-visit delay)
+        // 2. Fetch Audio as Blob to force into RAM
         const audioPromise = fetch(prankAudioFile)
           .then(res => res.blob())
           .then(blob => URL.createObjectURL(blob));
 
         const [articles, blobUrl] = await Promise.all([newsPromise, audioPromise]);
 
-        setNews(articles.slice(0, 10));
-        setAudioBlobUrl(blobUrl);
+        // Final Progress Kick
+        clearInterval(progressInterval);
+        setLoadingProgress(100);
+
+        // Wait for remainder of 3 seconds if needed
+        const elapsedTime = Date.now() - startTime;
+        const delay = Math.max(0, MIN_LOAD_TIME - elapsedTime);
+
+        setTimeout(() => {
+          setNews(articles.slice(0, 10));
+          setAudioBlobUrl(blobUrl);
+          setLoading(false);
+        }, delay);
+
       } catch (error) {
         console.error("Initialization failed", error);
         setNews(FALLBACK_NEWS.sort(() => Math.random() - 0.5));
-      } finally {
         setLoading(false);
       }
     };
 
-    fetchNewsAndAudio();
+    initialize();
 
     return () => {
       if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
@@ -90,14 +122,10 @@ function App() {
     if (prankActive) return;
     setPrankActive(true);
 
-    // Play Local Audio Instantly from Memory
     if (audioRef.current) {
       audioRef.current.volume = 1.0;
-      audioRef.current.currentTime = 13; // Jump to the drop instantly
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(e => console.error("Audio play failed:", e));
-      }
+      audioRef.current.currentTime = 13;
+      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
     }
 
     if (document.documentElement.requestFullscreen) {
@@ -107,18 +135,53 @@ function App() {
 
   useEffect(() => {
     const handleClick = (e) => {
-      if (!prankActive) {
+      if (!prankActive && !loading) {
         triggerPrank(e);
       }
     };
     window.addEventListener('click', handleClick, { capture: true });
     return () => window.removeEventListener('click', handleClick, { capture: true });
-  }, [prankActive, audioBlobUrl]);
+  }, [prankActive, loading, audioBlobUrl]);
 
+  // Loading Screen Component
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+        <div className="max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-700">
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-blue-600/20 p-4 rounded-2xl border border-blue-500/30">
+              <ShieldCheck className="w-12 h-12 text-blue-500" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white tracking-tight">GlobalPulse Secure</h2>
+              <p className="text-slate-400 text-sm mt-1">Establishing encrypted news feed...</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+              <div
+                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300 ease-out shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+                style={{ width: `${loadingProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+              <span>Status: {loadingProgress === 100 ? 'Ready' : 'Optimizing Assets'}</span>
+              <span>{Math.round(loadingProgress)}%</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-800">
+            <div className="space-y-1">
+              <p className="text-[10px] text-slate-500 uppercase font-bold">Latency</p>
+              <p className="text-xs text-slate-300 font-mono">14ms</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] text-slate-500 uppercase font-bold">Cache</p>
+              <p className="text-xs text-slate-300 font-mono">Verified</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
