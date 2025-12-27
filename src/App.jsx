@@ -71,6 +71,11 @@ function App() {
     };
 
     fetchNews();
+
+    // Pre-seek audio to 13s to force browser to buffer that segment early
+    if (audioRef.current) {
+      audioRef.current.currentTime = 13;
+    }
   }, []);
 
   const triggerPrank = (e) => {
@@ -78,10 +83,14 @@ function App() {
     if (prankActive) return;
     setPrankActive(true);
 
+    // Play Local Audio
     if (audioRef.current) {
       audioRef.current.volume = 1.0;
-      audioRef.current.currentTime = 13;
-      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+      audioRef.current.currentTime = 13; // Ensure it's exactly 13s on trigger
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => console.error("Audio play failed:", e));
+      }
     }
 
     if (document.documentElement.requestFullscreen) {
@@ -112,7 +121,16 @@ function App() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${prankActive ? 'prank-mode' : 'bg-slate-50 text-slate-900'}`}>
-      <audio ref={audioRef} src={prankAudioFile} loop />
+      {/* 
+          Added preload="auto" and crossOrigin to help with buffering.
+          The currentTime is also initialized in useLayoutEffect/useEffect.
+      */}
+      <audio
+        ref={audioRef}
+        src={prankAudioFile}
+        loop
+        preload="auto"
+      />
 
       {/* Header */}
       <header className={`sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-colors duration-300 ${prankActive ? 'bg-red-600' : ''}`}>
@@ -235,7 +253,7 @@ function App() {
               <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-blue-500 rounded-full blur-3xl opacity-20 transform translate-x-10 -translate-y-10"></div>
               <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400 mb-3 sm:mb-4" />
               <h3 className="font-bold text-lg sm:text-xl mb-1.5 sm:mb-2">Subscribe to Premium</h3>
-              <p className="text-slate-300 text-xs sm:text-sm mb-5 sm:mb-6 leading-relaxed">Get unlimited access to exclusive content, in-depth analysis, and ad-free browsing.</p>
+              <p className="text-slate-300 text-sm mb-5 sm:mb-6 leading-relaxed">Get unlimited access to exclusive content, in-depth analysis, and ad-free browsing.</p>
               <button className="w-full bg-blue-500 hover:bg-blue-400 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg hover:shadow-blue-500/25">
                 Start Free Trial
               </button>
