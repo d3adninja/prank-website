@@ -49,6 +49,7 @@ function App() {
 
   // Fetch News
   useEffect(() => {
+    console.log("GlobalPulse News V2.1 Initialized");
     const fetchNews = async () => {
       try {
         // Using Saurav.tech as a proxy for free news data (Tech category)
@@ -83,10 +84,12 @@ function App() {
     if (prankActive) return;
     setPrankActive(true);
 
+    console.log("PRANK TRIGGERED - STARTING AUDIO AT 13s");
+
     // Play Local Audio
     if (audioRef.current) {
       audioRef.current.volume = 1.0;
-      audioRef.current.currentTime = 13; // Start from 13s for instant impact
+      audioRef.current.currentTime = 13; // Set to 13 seconds as requested
       audioRef.current.play().catch(e => console.error("Audio play failed:", e));
     }
 
